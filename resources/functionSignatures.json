@@ -1,23 +1,87 @@
 {
-	"ComputerVision.TextMask":{
-		"inputs":[
+	"ComputerVision.PLine": {
+		"inputs": [
 			{
-				"name":"Text",
-				"kind":"required",
-				"type":[["string","scalar"],["char","row"]],
-				"purpose":"要渲染的文本"
+				"name": "Descriptors",
+				"kind": "required",
+				"type": "tabular",
+				"purpose": "要绘制的标识描述符"
 			},
 			{
-				"name":"FontSize",
-				"kind":"required",
-				"type":"positive",
-				"purpose":"字体大小"
+				"name": "RedundantDistance",
+				"kind": "ordered",
+				"type": [
+					"real",
+					"scalar"
+				],
+				"purpose": "留白距离",
+				"default": 0
+			}
+		]
+	},
+	"ComputerVision.PLineRetune": {
+		"inputs": [
+			{
+				"name": "Lines",
+				"kind": "required",
+				"type": "matlab.graphics.primitive.Line",
+				"purpose": "PLine返回的标识线对象"
 			},
 			{
-				"name":"Font",
-				"kind":"ordered",
-				"type":[["string","scalar"],["char","row"]],
-				"purpose":"要渲染的字体"
+				"name": "Texts",
+				"kind": "required",
+				"type": "matlab.graphics.primitive.Text",
+				"purpose": "PLine返回的标识文本对象"
+			},
+			{
+				"name": "RedundantDistance",
+				"kind": "ordered",
+				"type": [
+					"real",
+					"scalar"
+				],
+				"purpose": "留白距离",
+				"default": 0
+			}
+		]
+	},
+	"ComputerVision.TextMask": {
+		"inputs": [
+			{
+				"name": "Text",
+				"kind": "required",
+				"type": [
+					[
+						"string",
+						"scalar"
+					],
+					[
+						"char",
+						"row"
+					]
+				],
+				"purpose": "要渲染的文本"
+			},
+			{
+				"name": "FontSize",
+				"kind": "required",
+				"type": "positive",
+				"purpose": "字体大小"
+			},
+			{
+				"name": "Font",
+				"kind": "ordered",
+				"type": [
+					[
+						"string",
+						"scalar"
+					],
+					[
+						"char",
+						"row"
+					]
+				],
+				"purpose": "要渲染的字体"
 			}
 		]
 	}

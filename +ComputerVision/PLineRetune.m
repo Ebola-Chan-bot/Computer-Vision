@@ -1,0 +1,160 @@
+%[text] 对PLine进行重新微调
+%[text] 此函数配合PLine使用。PLine精心调整过的线条和文本位置，可能会因其它图形布局的改变（或您的手动更改）而变得不再适用。使用此函数以重新自动调优位置。
+%[text] 目前仅支持水平P值线。
+%[text] ## 语法
+%[text] ```matlabCodeExample
+%[text] ComputerVision.PLineRetune(Lines,Texts);
+%[text] ```
+%[text] ## 输入参数
+%[text] Lines(:,1)matlab.graphics.primitive.Line，PLine返回的标识线对象
+%[text] Texts(:,1)matlab.graphics.primitive.Text，PLine返回的标识文本对象
+%[text] RedundantDistance(1,1)=0，多个P值线、P值线和文本之间的留白距离，以图上标尺为单位。
+%[text] **See also** [ComputerVision.PLine](<matlab:doc ComputerVision.PLine>)
+function PLineRetune(Lines,Texts,RedundantDistance)
+arguments
+	Lines
+	Texts
+	RedundantDistance=0
+end
+NumPLines=numel(Lines);
+Ax=Lines(1).Parent;
+MinYLim=ylim(Ax);
+ylim(Ax,'auto');
+NewYLim=ylim(Ax);
+if NewYLim(1)>MinYLim(1)||NewYLim(2)<MinYLim(2)
+	ylim(Ax,[min(NewYLim(1),MinYLim(1)), max(NewYLim(2),MinYLim(2))]);
+end
+AllExtent=vertcat(Texts.Extent);
+
+% 计算真实的像素渲染范围
+ExtentRatios=zeros(NumPLines,4);
+for D=1:NumPLines
+	Str=join(string(Texts(D).String),newline);
+	FontSize=100;
+	ITArguments={zeros(FontSize*2*(sum(char(Str)==newline)+1),ceil(FontSize*(strlength(Str)+1)),3,'uint8'),[0,0],Str,'FontSize',FontSize,'TextColor',[255,0,0],'BoxColor',[0,255,0],'Font'};
+	try
+		Mask=insertText(ITArguments{:},Texts(D).FontName);
+	catch ME
+		if ME.identifier=="MATLAB:insertText:unrecognizedStringChoice"
+			Mask=insertText(ITArguments{:},'Arial');
+		else
+			ME.rethrow;
+		end
+	end
+	[TYs,TXs]=find(Mask(:,:,1)>0);
+	[BYs,BXs]=find(Mask(:,:,2)>0);
+	if ~isempty(TYs)&&~isempty(BYs)
+		BoxW=max(BXs)-min(BXs)+1;
+		BoxH=max(BYs)-min(BYs)+1;
+		ExtentRatios(D,:)=[(min(TXs)-min(BXs))/BoxW, (max(BYs)-max(TYs))/BoxH, ...
+			(max(BXs)-max(TXs))/BoxW, (min(TYs)-min(BYs))/BoxH];
+	end
+end
+
+AllW=AllExtent(:,3);
+AllH=AllExtent(:,4);
+AllExtent(:,1)=AllExtent(:,1)+AllW.*ExtentRatios(:,1);
+AllExtent(:,3)=AllW.*(1-ExtentRatios(:,1)-ExtentRatios(:,3));
+AllExtent(:,2)=AllExtent(:,2)+AllH.*ExtentRatios(:,2);
+AllExtent(:,4)=AllH.*(1-ExtentRatios(:,4)-ExtentRatios(:,2));
+
+Negative=AllExtent(:,2)<0;
+Positive=~Negative;
+AllXData=AllExtent(:,[1,3]);
+AllXData(:,2)=AllXData(:,1)+AllXData(:,2);
+
+%有两个Y轴时，图形对象所在的Y轴可能不是当前Y轴，需要特殊方法确保获取图形对象所在的Y轴
+YAxis=MATLAB.Graphics.GetYAxis(Lines(1));
+
+[MinX,MaxX]=bounds([vertcat(ruler2num(vertcat(Lines.XData),Ax.XAxis)),AllXData],2);%Lines.XData不一定是数值类型，因此必须转换成数值
+AllXData=[MinX,MaxX];
+NoChange=false;
+while true
+	if~NoChange
+		%坐标尺度变换时，文本框可能低于基线，需要强制调整上去
+		Baseline=ruler2num(vertcat(Lines.YData),Ax.YAxis);
+		Baseline(:,2)=[];
+		AllExtent(Negative,2)=min(AllExtent(Negative,2),Baseline(Negative)-AllExtent(Negative,4));
+		AllExtent(Positive,2)=max(AllExtent(Positive,2),Baseline(Positive));
+		AllYData=[AllExtent(:,2),AllExtent(:,4)+AllExtent(:,2)];
+	end
+	
+	%排除PLine太多，坐标区装不下的情形
+	RangeTable=sortrows(table(AllYData(:),repelem([true;false],NumPLines,1),'VariableNames',["Position","IsBottom"]),"Position");
+	NumLayers=0;
+	ExtentSum=0;
+	for P=1:height(RangeTable)
+		if RangeTable.IsBottom(P)
+			if ~NumLayers
+				RangeStart=RangeTable.Position(P);
+			end
+			NumLayers=NumLayers+1;
+		else
+			NumLayers=NumLayers-1;
+			if ~NumLayers
+				ExtentSum=ExtentSum+RangeTable.Position(P)-RangeStart;
+			end
+		end
+	end
+	YLim=ylim(Ax);
+	YLim=YLim(2)-YLim(1);
+	if num2ruler(ExtentSum*3/2,YAxis)>YLim
+		ComputerVision.Exception.Ax_cannot_fit_so_many_PLines.Warn;
+		return;
+	end
+	
+	%按照现有的尺度排开PLine分层
+	for D1=1:NumPLines-1
+		XData1=AllXData(D1,:).';
+		YData1=AllYData(D1,:).';
+		for D2=D1+1:NumPLines
+			if any(XData1>=AllXData(D2,:),'all')&&any(XData1<=AllXData(D2,:),'all')&&any(YData1>AllYData(D2,:),'all')&&any(YData1<AllYData(D2,:),'all')
+				NoChange=false;
+				if Negative(D1)
+					AllYData(D2,2)=AllYData(D1,1)-RedundantDistance;
+					AllYData(D2,1)=AllYData(D2,2)-AllExtent(D2,4);
+				else
+					AllYData(D2,1)=AllYData(D1,2)+RedundantDistance;
+					AllYData(D2,2)=AllYData(D2,1)+AllExtent(D2,4);
+				end
+			end
+		end
+	end
+	
+	%将新的分层规划应用到图形对象。这一步可能会自动改变坐标尺度。还负责缩短过大的P值线和文本的距离
+	for D=1:NumPLines
+		if Negative(D)
+			Lines(D).YData(:)=num2ruler(AllYData(D,2),YAxis);
+			Texts(D).Position(2)=AllYData(D,2)-Texts(D).Extent(4)*(1-ExtentRatios(D,4))-RedundantDistance;
+		else
+			Lines(D).YData(:)=num2ruler(AllYData(D,1),YAxis);
+			Texts(D).Position(2)=AllYData(D,1)+Texts(D).Extent(4)*(1-ExtentRatios(D,2))+RedundantDistance;
+		end
+	end
+
+	%P值线位置不变，不代表文本和P值线距离不需要调整，因此调整后再返回
+	if NoChange
+		break;
+	end
+
+	%确保ylim只增不减
+	OldYLim=ylim(Ax);
+	ylim(Ax,'auto');
+	NewYLim=ylim(Ax);
+	if NewYLim(1)>MinYLim(1)||NewYLim(2)<MinYLim(2)
+		ylim(Ax,[min(NewYLim(1),MinYLim(1)), max(NewYLim(2),MinYLim(2))]);
+		NewYLim=ylim(Ax);
+	end
+	NoChange=isequal(OldYLim,NewYLim);
+	AllExtent=vertcat(Texts.Extent);
+	AllW=AllExtent(:,3);
+	AllH=AllExtent(:,4);
+	AllExtent(:,1)=AllExtent(:,1)+AllW.*ExtentRatios(:,1);
+	AllExtent(:,3)=AllW.*(1-ExtentRatios(:,1)-ExtentRatios(:,3));
+	AllExtent(:,2)=AllExtent(:,2)+AllH.*ExtentRatios(:,2);
+	AllExtent(:,4)=AllH.*(1-ExtentRatios(:,4)-ExtentRatios(:,2));
+end
+end
+
+%[appendix]{"version":"1.0"}
+%---
