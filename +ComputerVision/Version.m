@@ -10,7 +10,7 @@ if isempty(pVersion)||AlwaysCheck
 	end
 	pVersion.Me=matlab.mpm.Version(V);
 	pVersion.MATLAB='R2026a';
-	pVersion.Dependencies=array2table(["MATLAB"	"20.2.3"	"https://github.com/Ebola-Chan-bot/MATLAB-Extension/releases"],VariableNames=["Namespace","Version","URL"]);
+	pVersion.Dependencies=array2table(["MATLAB"	"20.2.4"	"https://github.com/Ebola-Chan-bot/MATLAB-Extension/releases"],VariableNames=["Namespace","Version","URL"]);
 	pVersion.Dependencies.Version=matlab.mpm.Version(pVersion.Dependencies.Version);
 	for D=1:height(pVersion.Dependencies)
 		Namespace=pVersion.Dependencies.Namespace(D);
